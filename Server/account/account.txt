@@ -1,0 +1,9 @@
+1 chi chi 1 0
+2 chi1 chi 0 0
+3 gau gau 1 0
+4 hehe hehe 1 0
+5 ff ff 1 0
+6 nam chi 1 0
+7 hu hu 1 0
+8 jjj jjj 1 0
+9 hh hh 1 0
