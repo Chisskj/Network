@@ -108,7 +108,88 @@ void* getHistoryThread(void* args) {
     Message receivedMsg;
     recv(client, (char*)&receivedMsg, sizeof(receivedMsg), 0);
     tArgs->result = receivedMsg.opcode;
-    cout<< receivedMsg.payload << '\n';
+    tArgs->payload = receivedMsg.payload;
+
+    pthread_exit(NULL);
+}
+
+void *getRankThread(void *args) {
+    ThreadArgs *tArgs = (ThreadArgs *) args;
+    SOCKET client = tArgs->sock;
+    Account *acc = tArgs->acc;
+    char message[PAYLOAD_SIZE];
+    sprintf(message, "%s|%s", acc->user, acc->pass);
+    sendMessage(client, GET_RANK, message);
+
+    Message receivedMsg;
+    recv(client, (char *) &receivedMsg, sizeof(receivedMsg), 0);
+    tArgs->result = receivedMsg.opcode;
+    tArgs->payload = receivedMsg.payload;
+
+    pthread_exit(NULL);
+}
+void* startGameThread(void* args) {
+    ThreadArgs* tArgs = (ThreadArgs*)args;
+    SOCKET client = tArgs->sock;
+    Account* acc = tArgs->acc;
+    char message[PAYLOAD_SIZE];
+    sprintf(message, "%s|%s", acc->user, acc->pass);
+    sendMessage(client, START, message);
+
+    Message receivedMsg;
+    recv(client, (char*)&receivedMsg, sizeof(receivedMsg), 0);
+
+    tArgs->result = receivedMsg.opcode;
+    tArgs->payload = receivedMsg.payload;
+
+    pthread_exit(NULL);
+}
+void* createRoomThread(void* args) {
+    ThreadArgs* tArgs = (ThreadArgs*)args;
+    SOCKET client = tArgs->sock;
+    Account* acc = tArgs->acc;
+    char message[PAYLOAD_SIZE];
+    sprintf(message, "%s|%s|%s", acc->user, acc->pass, tArgs->payload.c_str());
+    sendMessage(client, CREATE_ROOM, message);
+
+    Message receivedMsg;
+    recv(client, (char*)&receivedMsg, sizeof(receivedMsg), 0);
+
+    tArgs->result = receivedMsg.opcode;
+    tArgs->payload = receivedMsg.payload;
+
+    pthread_exit(NULL);
+}
+void* joinedRoomThread(void* args) {
+    ThreadArgs* tArgs = (ThreadArgs*)args;
+    SOCKET client = tArgs->sock;
+    Account* acc = tArgs->acc;
+    char message[PAYLOAD_SIZE];
+    sprintf(message, "%s|%s|%s", acc->user, acc->pass, tArgs->payload.c_str());
+    sendMessage(client, JOIN_ROOM, message);
+
+    Message receivedMsg;
+    recv(client, (char*)&receivedMsg, sizeof(receivedMsg), 0);
+
+    tArgs->result = receivedMsg.opcode;
+    tArgs->payload = receivedMsg.payload;
+
+    pthread_exit(NULL);
+}
+
+void* storeHistoryThread(void *args) {
+    ThreadArgs *tArgs = (ThreadArgs *) args;
+    SOCKET client = tArgs->sock;
+    Account *acc = tArgs->acc;
+    char message[PAYLOAD_SIZE];
+    sprintf(message, "%s", tArgs->payload.c_str());
+    sendMessage(client, STORE_HISTORY, message);
+
+    Message receivedMsg;
+    recv(client, (char *) &receivedMsg, sizeof(receivedMsg), 0);
+
+    tArgs->result = receivedMsg.opcode;
+    tArgs->payload = receivedMsg.payload;
 
     pthread_exit(NULL);
 }

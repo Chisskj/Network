@@ -1,4 +1,4 @@
-#include <iostream>
+#include <bits/stdc++.h>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <map>
 using namespace std;
 
 typedef int SOCKET;
@@ -35,6 +36,7 @@ typedef struct Account {
 	char pass[25];
 	int status;
 	int islogin;
+	int point;
 }Account;
 vector<Account> listAccount;
 enum ACCOUNT_REQUEST {
@@ -47,12 +49,27 @@ enum GAME_REQUEST {
 	PLAY = 21,
 	END = 22,
 	GET_HISTORY = 23,
+	SET_SHIP = 24,
+	HIT = 25,
+	CREATE_ROOM = 26,
+	JOIN_ROOM = 27,
+	GET_RANK = 28,
+	STORE_HISTORY = 29,
 };
 enum GAME_RESPONSE {
 	START_SUCCESS = 200,
 	PLAY_SUCCESS = 201,
 	END_SUCCESS = 202,
 	GET_HISTORY_SUCCESS = 203,
+	WAITTING_FOR_PLAYER = 204,
+	SET_SHIP_SUCCESS = 205,
+	HIT_SUCCESS = 206,
+	CREATE_ROOM_SUCCESS = 207,
+	JOIN_ROOM_SUCCESS = 208,
+	JOIN_ROOM_FAIL = 209,
+	GET_RANK_SUCCESS = 210,
+	STORE_HISTORY_SUCCESS = 211,
+	STORE_HISTORY_FAIL = 212,
 };
 enum ACCOUNT_RESPONSE {
 	LOGIN_SUCCESS = 100,
