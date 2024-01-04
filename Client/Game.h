@@ -10,7 +10,16 @@ int storeHistory(SOCKET sock, string opponent, int score, int winner, string nam
     pthread_join(tid, NULL);
     return tArgs.result;
 }
+void FF(SOCKET sock, string opponent, int score, int winner, string name,int roomId) {
+    pthread_t tid;
+    string payload = "";
+    payload += opponent + "|" + to_string(score) + "|" + to_string(winner)  + "|" + to_string(roomId) + "|" + name;
 
+    ThreadArgs tArgs = { sock, NULL, NULL, NULL, 0, payload }; // Sử dụng string thay vì char*
+    pthread_create(&tid, NULL, FFThread, (void*)&tArgs);
+    pthread_join(tid, NULL);
+    return;
+}
 
 vector<string> split(const string &s, char delim) {
     vector<string> tokens;
@@ -44,14 +53,15 @@ player(string Name)
         ship_destroy[i]=0;
     }
 }
-void initialise_player_matrix(SOCKET,int,Account);
-void initialise_opponent_matrix(SOCKET,int,string);
+int initialise_player_matrix(SOCKET,int,Account);
+int initialise_opponent_matrix(SOCKET,int,string);
 int set_ship_position(int,int &col,int &row, char& align);
 int set_opponent_ship_position(int,int &col,int &row, char& align);
 void display_matrix();
 void hit_display_matrix();
+void forfeit(int,player,player, SOCKET, bool,int,bool);
 int hit(int,int);
-void show_winner(int,player,player, SOCKET);
+void show_winner(int,player,player, SOCKET,bool);
 };
 void player::display_matrix()
 {
@@ -111,7 +121,19 @@ int player::set_ship_position(int length,int &col,int &row, char& align)
 {
     this->display_matrix();
     bool f=1;
-    cin>>row>>col>>align;
+    string input;
+    cin>>input;
+    if(input == "ff")return 4;
+    if(input.length()>=2) return 2;
+    row = input[0]-'0';
+    cin>>input;
+    if(input == "ff")return 4;
+    if(input.length()>=2) return 2;
+    col = input[0]-'0';
+    cin>>input;
+    if(input == "ff")return 4;
+    if(input.length()>=2) return 2;
+    align = input[0];
     align=toupper(align);
     if(row>=10||row<0||col>=10||col<0)
         return 2;
@@ -199,7 +221,7 @@ int player::set_opponent_ship_position(int length,int &col,int &row, char& align
         }
  return 0;
 }
-void player::initialise_player_matrix(SOCKET sock,int roomID,Account acc)
+int player::initialise_player_matrix(SOCKET sock,int roomID,Account acc)
 {
     //Initialize all values of matrix to '.' at start '.' denotes water
     for(int i=0;i<10;i++)
@@ -228,6 +250,8 @@ void player::initialise_player_matrix(SOCKET sock,int roomID,Account acc)
             int col,row;
             char align;
             flag=this->set_ship_position(ship_length,col,row,align);
+            if(flag == 4)
+            return 0;
             if(flag==1)
             {
                 i++;
@@ -253,8 +277,9 @@ void player::initialise_player_matrix(SOCKET sock,int roomID,Account acc)
     this->display_matrix();
     getchar();
     getchar();
+    return 1;
 }
-void player::initialise_opponent_matrix(SOCKET sock,int roomID,string name)
+int player::initialise_opponent_matrix(SOCKET sock,int roomID,string name)
 {
     cout<<"Waiting for "<<name<<" to set its ships"<<endl;
     //Initialize all values of matrix to '.' at start '.' denotes water
@@ -270,6 +295,11 @@ void player::initialise_opponent_matrix(SOCKET sock,int roomID,string name)
     int flag=1;
     Message receivedMsg;
     recv(sock, (char*)&receivedMsg, sizeof(receivedMsg), 0);
+    if(receivedMsg.opcode == SURRENDER_SUCCESS)
+    {
+        cout<<"Opponent has Surrendered"<<endl;
+        return 0;
+    }
     if(receivedMsg.opcode == SET_SHIP_SUCCESS) cout<<"Ship set successfully"<<endl;
     string payload = receivedMsg.payload;
     payload = payload.substr(1);
@@ -282,6 +312,7 @@ void player::initialise_opponent_matrix(SOCKET sock,int roomID,string name)
             i++;
             ship_length--;
     }
+    return 1;
 }
 int player::hit(int x,int y)
 {
@@ -300,7 +331,7 @@ int player::hit(int x,int y)
     else
         return 0;
 }
-void player::show_winner(int w,player p1,player p2, SOCKET sock)
+void player::show_winner(int w,player p1,player p2, SOCKET sock,bool isPrivate)
 {
       if(w==1)
       {   
@@ -312,16 +343,48 @@ void player::show_winner(int w,player p1,player p2, SOCKET sock)
           cout<<"Congrats!! "<<p2.name<<" won by "<<abs(p2.hits-p1.hits)<<" points"<<endl;
 
       }
-        storeHistory(sock,p2.name, p2.hits - p1.hits, 2-w,p1.name);
+      int score = p2.hits - p1.hits;
+      if(isPrivate) score =0;
+        storeHistory(sock,p2.name,score, 2-w,p1.name);
       getchar();
       getchar();
 }
-void start_game(string name1,string name2, int roomID, Account acc, SOCKET sock,bool isFirst)
+void player::forfeit(int w,player p1,player p2, SOCKET sock, bool isPrivate,int roomID, bool isFF)
+{
+    if(w==1)
+    {
+        cout<<p2.name<<" surrendered"<<endl<<p1.name<<" won by "<<abs(p1.hits-p2.hits)<<" points"<<endl;
+    }
+    if(w==2)
+    {
+        cout<<p1.name<< " surrendered"<<endl<<p2.name<<" won by "<<abs(p2.hits-p1.hits)<<" points"<<endl;
+    }
+    int score = p2.hits - p1.hits;
+    if(isPrivate) score =0;
+    if(isFF) FF(sock,p2.name,score, 2-w,p1.name,roomID);
+    cout<<"Press any key to exit"<<endl;
+    getchar();
+    getchar();
+}
+void start_game(string name1,string name2, int roomID, Account acc, SOCKET sock,bool isFirst, bool isPrivate)
 {
     player p1(name1),p2(name2);
+    bool isFF = false;
     //Initialize position of ships of both players
-    p1.initialise_player_matrix(sock,roomID,acc);
-    p2.initialise_opponent_matrix(sock,roomID,name2);
+    int checkff = p1.initialise_player_matrix(sock,roomID,acc);
+    if(checkff==0)
+    {
+        p1.forfeit(2,p1,p2,sock,isPrivate,roomID,true);
+        isFF = true;
+        return;
+    }
+    checkff = p2.initialise_opponent_matrix(sock,roomID,name2);
+    if(checkff==0)
+    {
+        p1.forfeit(1,p1,p2,sock,isPrivate,roomID,false);
+        isFF = true;
+        return;
+    }
     //Game play
     int gameover=0,player_chance=1,winner;
     if(isFirst)
@@ -341,7 +404,15 @@ void start_game(string name1,string name2, int roomID, Account acc, SOCKET sock,
             p2.hit_display_matrix();
             cout<<"Enter the coordinates you want to attack : "<<endl;
             int x,y;
-            cin>>x>>y;
+            string input;
+            cin>>input;
+            if(input == "ff"){p1.forfeit(2,p1,p2,sock,isPrivate,roomID,true);isFF = true;return;}
+            if(input.length()>=2) x=-1;
+            x= input[0]-'0';
+            cin>>input;
+            if(input == "ff"){p1.forfeit(2,p1,p2,sock,isPrivate,roomID,true);isFF = true;return;}
+            if(input.length()>=2) y=-1;
+            y= input[0]-'0';
             if(x<0||x>=10||y<0||y>=10)
                 cout<<"Please enter the coordinates which are present in the matrix! "<<endl;
             else if(p2.hitmat[x][y])
@@ -384,6 +455,12 @@ void start_game(string name1,string name2, int roomID, Account acc, SOCKET sock,
             int x,y;
             Message receiveMsg;
             recv(sock, (char*)&receiveMsg, sizeof(receiveMsg), 0);
+            if(receiveMsg.opcode == SURRENDER_SUCCESS)
+            {
+            p1.forfeit(1,p1,p2,sock,isPrivate,roomID,false);
+            isFF = true;
+            return;
+            }
             x = receiveMsg.payload[0] - '0';
             y = receiveMsg.payload[2] - '0';
             cout<<x<<" "<<y<<endl;
@@ -415,8 +492,7 @@ void start_game(string name1,string name2, int roomID, Account acc, SOCKET sock,
                }
             }
         }
-
-
     }
-      p1.show_winner(winner,p1,p2,sock);
+    if(!isFF)
+      p1.show_winner(winner,p1,p2,sock,isPrivate);
 }

@@ -18,7 +18,8 @@ void menu2(char &choice)
     cout << "2. Custom Game\n";
     cout << "3. Xem bảng xếp hạng\n";
     cout << "4. Xem lịch sử đấu\n";
-    cout << "5. Đăng xuất\n";
+    cout<< "5. Online player\n";
+    cout << "6. Đăng xuất\n";
     cout << "=======================\n";
     cout << "Nhập lựa chọn của bạn: "; 
     cin >> choice;

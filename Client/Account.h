@@ -193,3 +193,32 @@ void* storeHistoryThread(void *args) {
 
     pthread_exit(NULL);
 }
+void* FFThread(void *args) {
+    ThreadArgs *tArgs = (ThreadArgs *) args;
+    SOCKET client = tArgs->sock;
+    Account *acc = tArgs->acc;
+    char message[PAYLOAD_SIZE];
+    sprintf(message, "%s", tArgs->payload.c_str());
+    sendMessage(client, SURRENDER, message);
+
+    Message receivedMsg;
+    recv(client, (char *) &receivedMsg, sizeof(receivedMsg), 0);
+    
+    pthread_exit(NULL);
+}
+void* getOnlinePlayersThread(void *args) {
+    ThreadArgs *tArgs = (ThreadArgs *) args;
+    SOCKET client = tArgs->sock;
+    Account *acc = tArgs->acc;
+    char message[PAYLOAD_SIZE];
+    sprintf(message, "%s", tArgs->payload.c_str());
+    sendMessage(client, GET_ONLINE_PLAYERS, message);
+
+    Message receivedMsg;
+    recv(client, (char *) &receivedMsg, sizeof(receivedMsg), 0);
+
+    tArgs->result = receivedMsg.opcode;
+    tArgs->payload = receivedMsg.payload;
+
+    pthread_exit(NULL);
+}

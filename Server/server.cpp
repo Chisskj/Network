@@ -23,7 +23,6 @@ void loadAccountTxt(vector<Account>& list) {
             listLoad.push_back(acc);
             count++;
         }
-        cout << " => LOADED "<< count << " account(s)" << '\n';
     } else {
         cout << " => ERROR : Cannot open file " << FILE_ACCOUNT << '\n';
     }
@@ -122,6 +121,19 @@ string timestampToDateTime(time_t timestamp) {
     return string(buffer);
 }
 
+string getOnlinePlayers(int &stt,SOCKET sock) {
+    string online = "";
+    int newStt = stt;
+    for (int i = newStt; i < listAccount.size(); i++) {
+        if (listAccount[i].islogin == 1 && listAccount[i].sock != sock) {
+            online += string(listAccount[i].user) + ": online\n";
+        }
+        newStt = i;  // Cập nhật newStt để lưu vị trí cuối cùng đã duyệt qua
+    }
+    stt = newStt + 1;  // Cập nhật stt để sử dụng cho lần gọi tiếp theo
+    return online;
+}
+
 
 string get_history(const string& user) {
     string history = "";
@@ -147,7 +159,7 @@ string getRank() {
     sort(listAccount.begin(), listAccount.end(), compareAccounts);
     int sl = min(5, (int)listAccount.size());
     for (int i = 0; i < sl; i++) {
-        rank += (string)listAccount[i].user + " " + to_string(listAccount[i].point) + "\n";
+        rank +=to_string(i+1)+". " + (string)listAccount[i].user + " " + to_string(listAccount[i].point) + "\n";
     }
     return rank;
 }
@@ -155,7 +167,6 @@ void *handleClient(void *arg) {
     int client_socket = *((int *)arg);
     char buffer[BUFF_SIZE];
     int bytes_received;
-    loadAccountTxt(listAccount);
     printListAcc(listAccount);
 
     while (true) {
@@ -169,6 +180,17 @@ void *handleClient(void *arg) {
                     break;
                 }
             }
+            for(int i = 0;i < rooms.size();i++) {
+                if(rooms[i].players.size() > 0) {
+                    for(int j = 0;j < rooms[i].players.size();j++) {
+                        if(rooms[i].players[j].sock == client_socket) {
+                            rooms[i].players.erase(rooms[i].players.begin() + j);
+                            break;
+                        }
+                    }
+                }
+                if(rooms[i].players.size()==0) rooms[i].isClosed = true;
+            }
             cerr << "Connection closed by client.\n";
             break;
         }
@@ -177,10 +199,11 @@ void *handleClient(void *arg) {
         switch (receivedMsg.opcode) {
             case LOGIN:
             {
-                cout << "Received LOGIN request with payload: " << receivedMsg.payload << "\n";
+
                 char login_user[25];
                 char login_pass[25];
                 if (sscanf(receivedMsg.payload, "%24[^|]|%24s", login_user, login_pass) == 2) {
+                cout << "Received LOGIN request from" << login_user << " with payload: " << receivedMsg.payload << "\n";
                     // Lấy được user và pass thành công từ payload
                     cout << "Username: " << login_user << ", Password: " << login_pass << endl;
                     bool found = false;
@@ -226,10 +249,10 @@ void *handleClient(void *arg) {
 
             case REGISTER:
             {
-                cout << "Received REGISTER request with payload: " << receivedMsg.payload << "\n";
                 char reg_user[25];
-                char reg_pass[25];
+                char reg_pass[25]; 
                 if (sscanf(receivedMsg.payload, "%24[^|]|%24s", reg_user, reg_pass) == 2) {
+                cout << "Received REGISTER from " <<reg_user<<" request with payload: " << receivedMsg.payload << "\n";
                     // Lọc user và pass từ payload
                     cout << "Username: " << reg_user << ", Password: " << reg_pass << endl;
                     bool usernameExists = false;
@@ -281,11 +304,11 @@ void *handleClient(void *arg) {
             }
             case LOGOUT:
             {
-                cout << "Received LOGOUT request with payload: " << receivedMsg.payload << "\n";
                 
                 char logout_user[25];
                 char logout_pass[25];
                 if (sscanf(receivedMsg.payload, "%24[^|]|%24s", logout_user, logout_pass) == 2) {
+                cout << "Received LOGOUT request from " <<logout_user<<" with payload: " << receivedMsg.payload << "\n";
                     // Lọc user và pass từ payload
                     cout << "Username: " << logout_user << ", Password: " << logout_pass << endl;
                     bool found = false;
@@ -313,10 +336,10 @@ void *handleClient(void *arg) {
             }
             case GET_HISTORY:
             {
-                cout << "Received GET_HISTORY request with payload: " << receivedMsg.payload << "\n";
-                char get_history_user[25];
+                 char get_history_user[25];
                 char get_history_pass[25];
-                if (sscanf(receivedMsg.payload, "%24[^|]|%24s", get_history_user, get_history_pass) == 2) {
+               if (sscanf(receivedMsg.payload, "%24[^|]|%24s", get_history_user, get_history_pass) == 2) {
+                cout << "Received GET_HISTORY request from " <<get_history_user<<" with payload: " << receivedMsg.payload << "\n";
                     // Lọc user và pass từ payload
                     cout << "Username: " << get_history_user << ", Password: " << get_history_pass << endl;
                     string history = get_history(get_history_user);
@@ -328,11 +351,12 @@ void *handleClient(void *arg) {
                 break;
             }
             case START: {
-                cout << "Received START request with payload: " << receivedMsg.payload << "\n";
                 char start_user[25];
                 char start_pass[25];
                 if (sscanf(receivedMsg.payload, "%24[^|]|%24s", start_user, start_pass) == 2) {
                     // Lọc user và pass của payload
+                cout << "Received START request from " <<start_user<<" with payload: " << receivedMsg.payload << "\n";
+                
                     Account accUser;
                     bool found = false;
                     for (int i = 0; i < listAccount.size(); i++) {
@@ -350,6 +374,9 @@ void *handleClient(void *arg) {
                     } else {
                         bool joinedRoom = false;
                         for (int j = 0; j < rooms.size(); j++) {
+                            if(rooms[j].isClosed == true) {
+                                continue;
+                            }
                             if (rooms[j].ispublic == 0  && rooms[j].players.size() < 2) {
                                 joinRoom(rooms[j].roomID, accUser , "");
                                 joinedRoom = true;
@@ -383,13 +410,17 @@ void *handleClient(void *arg) {
                 break;
             }
             case SET_SHIP: {
-                cout << "Received SET_SHIP request with payload: " << receivedMsg.payload << "\n";
                 int roomID;
                 int col;
                 int row;
                 char userName[25];
                 char align; // Đổi align thành char
+                
                 if (sscanf(receivedMsg.payload, "%24[^|]|%d|%d|%d|%c", userName, &roomID, &col, &row, &align) == 5) {
+                    if(rooms[roomID].isClosed == true) {
+                        break;
+                    }
+                cout << "Received SET_SHIP request from " <<userName<<" with payload: " << receivedMsg.payload << "\n";
                     rooms[roomID].playersReady[userName] += "|" + to_string(col) + "|" + to_string(row) + "|" + align;
                     if(rooms[roomID].playersReady[userName].size() == 30){
                         rooms[roomID].playerReadyCount++;
@@ -406,12 +437,12 @@ void *handleClient(void *arg) {
                 break;
             }
             case HIT: {
-                cout << "Received HIT request with payload: " << receivedMsg.payload << "\n";
                 int roomID;
                 int col;
                 int row;
                 int tt;
                 if (sscanf(receivedMsg.payload, "%d|%d|%d|%d", &roomID, &col, &row, &tt) == 4) {
+                cout << "Received HIT request from " << rooms[roomID].players[tt].user << " with payload: " << receivedMsg.payload << "\n";
                     Message responseMsg;
                     responseMsg.opcode = HIT_SUCCESS;
                     sprintf(responseMsg.payload, "%d|%d", col, row);
@@ -421,11 +452,11 @@ void *handleClient(void *arg) {
                 break;
             }
             case CREATE_ROOM: {
-                cout << "Received CREATE_ROOM request with payload: " << receivedMsg.payload << "\n";
                 char userCreateName[25];
                 char passCreateName[25];
                 char passRoom[11];
                 if (sscanf(receivedMsg.payload, "%24[^|]|%24[^|]|%10s", userCreateName, passCreateName, passRoom) == 3) {
+                cout << "Received CREATE_ROOM request from " << userCreateName << " with payload: " << receivedMsg.payload << "\n";
                     createRoom(rooms.size(), false, passRoom);
                     Account accUser;
                     strcpy(accUser.user, userCreateName);
@@ -441,12 +472,12 @@ void *handleClient(void *arg) {
                 break;
             }
             case JOIN_ROOM: {
-                cout << "Received JOIN_ROOM request with payload: " << receivedMsg.payload << "\n";
                 char userJoinName[25];
                 char passJoinName[25];
                 char passRoom[11];
                 int roomID;
                 if (sscanf(receivedMsg.payload, "%24[^|]|%24[^|]|%d|%10s", userJoinName, passJoinName, &roomID, passRoom) == 4) {
+                cout << "Received JOIN_ROOM request from " << userJoinName << " with payload: " << receivedMsg.payload << "\n";
                     if(roomID<0 || roomID >= rooms.size()){
                         Message responseMsg;
                         responseMsg.opcode = JOIN_ROOM_FAIL;
@@ -496,12 +527,12 @@ void *handleClient(void *arg) {
                 break;
             }
             case STORE_HISTORY: {
-            cout << "Received STORE_HISTORY request with payload: " << receivedMsg.payload << "\n";
             char opponent[25];
             int score;
             int winner;
             char name[25];
             if (sscanf(receivedMsg.payload, "%24[^|]|%d|%d|%24s", opponent, &score, &winner, name) == 4) {
+            cout << "Received STORE_HISTORY request from " << name << " with payload: " << receivedMsg.payload << "\n";
                 string opponentStr(opponent);
                 string nameStr(name);
                 storeHistoryToDB(opponentStr, score, winner, nameStr);
@@ -516,6 +547,58 @@ void *handleClient(void *arg) {
             }
             break;
         }
+       case GET_ONLINE_PLAYERS: {
+    cout << "Received GET_ONLINE_PLAYERS request with payload: " << receivedMsg.payload << "\n";
+    char stt[10];
+    if (sscanf(receivedMsg.payload, "%9s", stt) == 1) {
+        int sttValue = atoi(stt);
+        string payload = getOnlinePlayers(sttValue, client_socket);
+        Message responseMsg;
+        responseMsg.opcode = GET_ONLINE_PLAYERS_SUCCESS;
+        payload = to_string(sttValue) + "|" + payload;
+        cout<< payload <<endl;
+        strncpy(responseMsg.payload, payload.c_str(), sizeof(responseMsg.payload) - 1);
+        responseMsg.payload[sizeof(responseMsg.payload) - 1] = '\0';
+        send(client_socket, (char *)&responseMsg, sizeof(responseMsg), 0);
+    }
+    break;
+}
+    case SURRENDER: {
+        
+            cout << "Received SURRENDER request with payload: " << receivedMsg.payload << "\n";
+            char opponent[25];
+            int score;
+            int winner;
+            char name[25];
+            int roomId;
+            if (sscanf(receivedMsg.payload, "%24[^|]|%d|%d|%d|%24s", opponent, &score, &winner, &roomId,name) == 5) {
+                rooms[roomId].isClosed = true;
+                string opponentStr(opponent);
+                string nameStr(name);
+                storeHistoryToDB(opponentStr, score, winner, nameStr);
+                storeHistoryToDB(nameStr, -score, 1-winner, opponent);
+                updatePoints(nameStr, score);
+                updatePoints(opponentStr, -score);
+                Message responseMsg;
+                responseMsg.opcode = SURRENDER_SUCCESS;
+                 //tìm người còn lại và trả về cho họ
+                if(rooms[roomId].players.size()==2 && rooms[roomId].players[0].sock==client_socket)
+                {
+                    cout<<rooms[roomId].players[1].user<<'\n';
+                    send(rooms[roomId].players[1].sock, (char *)&responseMsg, sizeof(responseMsg), 0);
+                    
+                    rooms[roomId].players.erase(rooms[roomId].players.begin());
+                }
+                else
+                if(rooms[roomId].players.size()==2)
+                {
+                    cout<<rooms[roomId].players[0].user<<'\n';
+                send(client_socket, (char *)&responseMsg, sizeof(responseMsg), 0);
+                rooms[roomId].players.pop_back();
+                }
+            }
+            break;
+    }
 
             // Các trường hợp xử lý khác
             // ...
@@ -545,7 +628,7 @@ int main() {
     }
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(6769);
+    server_addr.sin_port = htons(6868);
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
@@ -556,7 +639,8 @@ int main() {
 
     listen(server_socket, 20);
     cout << "Server is running...\n";
-
+    
+    loadAccountTxt(listAccount);
     while (true) {
         int client_socket;
         struct sockaddr_in client_addr;

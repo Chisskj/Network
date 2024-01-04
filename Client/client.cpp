@@ -65,6 +65,14 @@ int joinRoomClient(SOCKET sock, Account& acc, string &payload) {
     payload = tArgs.payload;
     return tArgs.result;
 }
+int getOnlinePlayers(SOCKET sock, Account& acc, string &payload) {
+    pthread_t tid;
+    ThreadArgs tArgs = { sock, &acc, NULL, NULL, 0,payload };
+    pthread_create(&tid, NULL, getOnlinePlayersThread, (void*)&tArgs);
+    pthread_join(tid, NULL);
+    payload = tArgs.payload;
+    return tArgs.result;
+}
 int checkPass(string passRoom)
 {
     if(passRoom.size()<6 || passRoom.size()>10)
@@ -92,7 +100,7 @@ int main() {
     }
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(6769);
+    server_addr.sin_port = htons(6868);
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Địa chỉ IP của máy chủ
 
     if (connect(client_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
@@ -116,7 +124,7 @@ int main() {
                         int room_id;
                         char opponent[25];
                         sscanf(payload.c_str(), "%d|%s", &room_id, opponent);
-                        start_game(acc.user,opponent,room_id,acc,client_socket,false);
+                        start_game(acc.user,opponent,room_id,acc,client_socket,false,false);
                     } else {
                         if (result == WAITTING_FOR_PLAYER) {
                             cout << "Waiting for player to join.\n";
@@ -127,10 +135,10 @@ int main() {
                             int room_id;
                             char opponent[25];
                             sscanf(msg.payload, "%d|%s", &room_id, opponent);
-                            start_game(acc.user,opponent,room_id,acc,client_socket,true);
+                            start_game(acc.user,opponent,room_id,acc,client_socket,true,false);
                         }
                         else 
-                        cout << "Failed to start game.\n";
+                        cout <<result << "Failed to start game.\n";
                     }
                     break;
                 }
@@ -169,7 +177,7 @@ int main() {
                                     cout << msg.opcode << " " << msg.payload << "\n";
                                     char opponent[25];;
                                     sscanf(msg.payload, "%d|%s", &room_id, opponent);
-                                    start_game(acc.user,opponent,room_id,acc,client_socket,true);
+                                    start_game(acc.user,opponent,room_id,acc,client_socket,true,true);
                                 }
                                 break;
                             }
@@ -213,7 +221,7 @@ int main() {
                                     int room_id;
                                     char opponent[25];
                                     sscanf(payload.c_str(), "%d|%s", &room_id, opponent);
-                                    start_game(acc.user,opponent,room_id,acc,client_socket,false);
+                                    start_game(acc.user,opponent,room_id,acc,client_socket,false,true);
                                 }
                                 else if(result == JOIN_ROOM_FAIL)
                                 {
@@ -224,6 +232,9 @@ int main() {
                                 break;
                             }
                             case 3: {
+                                cout << "Back to main menu.\n";
+                                cout << "Press any key to continue...";
+                                getchar();
                                 break;
                             }
                             default: {
@@ -238,7 +249,10 @@ int main() {
                     string payload="";
                     int result = getRank(client_socket, acc, payload);
                     if (result == GET_RANK_SUCCESS) {
+                        cout << "Ranking in the server: \n";
                         cout << payload << "\n";
+                        cout << "Press any key to continue...";
+                        getchar();
                     }
                     else {
                         cout << "Failed to fetch rank.\n";
@@ -250,12 +264,83 @@ int main() {
                     int result = getHistory(client_socket, acc, payload);
                     if (result == GET_HISTORY_SUCCESS) {
                             cout << payload << "\n";
+                            cout << "Press any key to continue...";
+                            getchar();
                         } else {
+                            cout<<"Code: "<<result;
+                            cout<<payload;
                             cout << "Failed to fetch history.\n";
                         }
                     break;
                 }
                 case '5': {
+                    bool loadMorePlayers = true;
+
+                int vtt = 0;
+                while (loadMorePlayers) {
+                cout << "1. Get at most 5 online players\n";
+                cout << "2. Load more 5 players\n";
+                cout << "3. Exit\n";
+                cout << "Choose an option: ";
+
+                int choice;
+                cin >> choice;
+                switch (choice) {
+                    case 1: {
+                        string payload = to_string(vtt);
+                        int result = getOnlinePlayers(client_socket, acc, payload);
+                        size_t pos = payload.find("|");
+                        if(pos != string::npos) {
+                            vtt = stoi(payload.substr(0, pos));
+                            payload = payload.substr(pos + 1);
+                        }
+                        if (result == GET_ONLINE_PLAYERS_SUCCESS) {
+                            system("clear");
+                            cout << "Online players: \n";
+                            if(payload != "")
+                            cout << payload << "\n";
+                            else cout << "No online players.\n";
+                            cout << "Press any key to continue...";
+                            getchar();
+                            getchar();
+                        }
+                        else {
+                            cout << "Failed to fetch online players.\n";
+                        }
+                        break;
+                    }
+                    case 2: {
+                        string payload = to_string(vtt);
+                        int result = getOnlinePlayers(client_socket, acc, payload);
+                        size_t pos = payload.find("|");
+                        if(pos != string::npos) {
+                            vtt = stoi(payload.substr(0, pos));
+                            payload = payload.substr(pos + 1);
+                        }
+                        if(result == GET_ONLINE_PLAYERS_SUCCESS) {
+                            if(payload != "")
+                            cout << payload << "\n";
+                            else cout << "No more online players.\n";
+                            cout << "Press any key to continue...";
+                            getchar();
+                            getchar();
+                        }
+                        else {
+                            cout << "Failed to fetch online players.\n";
+                        }
+                        break;
+                    }
+                    case 3:
+                        {loadMorePlayers = false;
+                        break;}
+                    default:
+                        {cout << "Invalid choice. Please enter again.\n";
+                        break;}
+                }
+            }
+            break;
+                }
+                case '6': {
             int result = logout(client_socket, acc);
             if (result == LOGOUT_SUCCESS) {
                 isLoggedIn = false;
